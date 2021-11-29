@@ -8,18 +8,23 @@ carteCourante=0			#la carte joué par le robot
 
 #methode recupere les cartes 
 waitCartes()
-{	sleep 1
+{	
 	#Envoie au gestionnaire du jeu que le joueur a recu les cartes
 	echo "Robot $numeroRobot a recu ses cartes." | nc localhost 9091 | echo "Vous avez recu vos cartes." 
-	cartesRobot=$(cat tmp/cartePartie)
+	
+	for i in $(eval echo {1..$(wc -w tmp/cartePartie | cut -d" " -f1)}); #nombre d'élément dans le fichier
+	do	
+		cartesRobot+=($(echo $(cat tmp/cartePartie) | cut -d" " -f$i))	
+	done
+	echo ${cartesRobot[*]} #phase de tester a enlever
 	echo "" > tmp/cartePartie
 }
 
 #methode qui attend le top depart
 waitTopDepart()
-{	sleep 1
+{	
 	#Envoyer au serveur que le joueur a recu le top depart
-	echo "Robot $numeroRobot a recu le top depart." | nc -l -p 9091 | echo "Debut de la partie"
+	echo "Robot $numeroRobot a recu le top depart." | nc -l -p 9092 | echo "Debut de la partie"
 }
 
 #methode qui essaye de faire jouer le robot au meilleur moment
@@ -30,21 +35,20 @@ jouerRobot()
 	
 	#randomValue=$(( $((1 + $RANDOM % 8)) % 10 ))
 	#time=$(($carteCourante * $randomValue))
-	time=2	#pour la phase de test on ne prend pas de valeur complique
-
-	sleep $time
+	
+	#pour la phase de test 
+	sleep 0
 
 	#on envoie la carte choisie au gestionnaire de jeu
 	#echo jouerCarte $carteCourante | nc localhost 9091
 	
-	echo Carte courante : $carteCourante
 	#ecrit la valeur de la carte dans carteAJouer
 	echo $carteCourante > tmp/carteAJouer
 	
 	#ecrit le num du robot dans numJoueur
 	echo $numeroRobot > tmp/numJoueur
 	
-	echo "Robot $numeroRobot a jouer la carte $carteCourante" | nc localhost 9091 | echo "Carte joue."
+	echo "Robot $numeroRobot a jouer la carte $carteCourante" | nc localhost 9093 
 
 	#on enleve la carte des cartes disponible pour le robot
 	cartesRobot=( ${cartesRobot[*]/$carteCourante} )
@@ -73,11 +77,10 @@ startGame()
 					onAttend=false
 					waitCartes
 				fi
-				sleep 1
 			done
+		else
+			jouerRobot
 		fi
-		
-		jouerRobot
 	done
 }
 

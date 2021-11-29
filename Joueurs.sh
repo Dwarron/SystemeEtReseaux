@@ -19,15 +19,20 @@ waitCartes()
 {
 	#Envoie au gestionnaire du jeu que le joueur a recu les cartes
 	echo "Joueur $numeroJoueur a recu ses cartes." | nc localhost 9091 | echo "Vous avez recu vos cartes." 
-	cartesJoueur=$(cat tmp/cartePartie)
+	
+	for i in $(eval echo {1..$(wc -w tmp/cartePartie | cut -d" " -f1)}); #nombre d'élément dans le fichier
+	do	
+		cartesJoueur+=($(echo $(cat tmp/cartePartie) | cut -d" " -f$i))	
+	done
 	echo "" > tmp/cartePartie
+	echo ${cartesJoueur[*]}
 }
 
 #methode qui attend le top depart
 waitTopDepart()
 {
 	#Envoyer au serveur que le joueur a recu le top depart
-	echo "Joueur $numeroJoueur a recu le top depart." | nc -l -p 9091 | echo "Debut de la partie"
+	echo "Joueur $numeroJoueur a recu le top depart." | nc -l -p 9092 | echo "Debut de la partie"
 }
 
 startGame()
@@ -48,12 +53,12 @@ startGame()
 			onAttend=true
 			while [ $onAttend == "true" ]
 			do
-				echo Fichier tmp/redistribuer : $(wc -w tmp/redistribuer | cut -d" " -f1)
 				#si le fichier tmp/redistribuer n'est pas vide, redistribution cartes
 				if [ $(wc -w tmp/redistribuer | cut -d" " -f1) != 0 ];
 				then
 					onAttend=false
-					waitCartes
+					unset cartesJoueur	#on nettoie les indices du tableau des cartes
+					waitCartes		#on attend de nouvelles cartes
 				fi
 				sleep 1
 			done
@@ -77,7 +82,7 @@ startGame()
 				echo $numeroJoueur > tmp/numJoueur
 				
 				echo "Joueur $numeroJoueur a jouer la carte $carteCourante" | 
-				nc localhost 9091 | echo "Carte joue."
+				nc localhost 9093 | echo "Carte joue."
 			
 				#on enleve la carte des cartes disponible pour le joueur
 				cartesJoueur=( ${cartesJoueur[*]/$carteCourante} )
