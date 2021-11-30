@@ -16,13 +16,14 @@ initJoueurs()
 	echo Pour commencer, selectionner le nombre de joueur"("s")"  :
 	read nbJoueurs
 	
-	for i in $(eval echo {1..$nbJoueurs});
-	do	
-		#faire des tests pour savoir si on est dans le cas ou il faut utiliser gnome-terminal ou xterm
-		gnome-terminal -e "bash -c './Joueurs.sh $i;$SHELL'"  #$i represente le numero du joueurs
-		#ou
-		#xterm -e /bin/bash -l -c './Joueurs.sh $i'		
-	done
+	if [ $nbJoueurs != 0 ];
+	then
+		for i in $(eval echo {1..$nbJoueurs});
+		do	
+			#ouvre un terminal pour chaque joueur
+			gnome-terminal -e "bash -c './Joueurs.sh $i;$SHELL'"  #$i represente le numero du joueurs
+		done
+	fi
 }
 
 initRobots()
@@ -31,11 +32,15 @@ initRobots()
 	echo Ensuite selectionner le nombre de robot"("s")" :
 	read nbRobots
 	
-	#on ouvre des terminaux pour les robots mais tous est automatisé
-	for i in $(eval echo {1..$nbRobots});
-	do
-		gnome-terminal -e "bash -c './Robots.sh $i;$SHELL'" 
-	done
+	if [ $nbRobots != 0 ];
+	then
+		for i in $(eval echo {1..$nbRobots});
+		do
+			num=$(($nbJoueurs + $i))
+			#ouvre un terminal pour chaque robot mais tous est automatisé
+			gnome-terminal -e "bash -c './Robots.sh $num;$SHELL'" 
+		done
+	fi
 }
 
 #methode qui remplie un tableau qui represente l'ensemble des cartes, de 1 a 100 au départ
@@ -64,7 +69,7 @@ distribueCartes()
 				
 				echo Trop de carte distribué, fin de la partie.
 				partieFini=true
-				exitGame "Trop de carte distribué, fin de la partie."
+				exitPartie "Trop de carte distribué, fin de la partie."
 			fi
 				
 			randomCarte=$(($RANDOM % $((99 - $carteDistibue)))) #indice d'une carte tiré au hasard
@@ -81,6 +86,7 @@ distribueCartes()
 		done
 		echo Cartes : $(cat tmp/cartePartie)
 		echo "Cartes pour le participant $i" | nc -l -p 9091 
+		echo on a passer la distribution
 		sleep 1 #laisse le temps au participants de recuperer les cartes
 	done
 	
@@ -88,34 +94,27 @@ distribueCartes()
 }
 
 #methode qui retire la carte envoyer au joueur du tableau des cartes 
-#1-recuperer toutes les cartes apres cette indice dans un tableau temporaire
-#2-supprimer toutes les cartes a partir de la carte a retirer
-#3-concatener le début du tableau des cartes qui na pas changé avec le tableau temporaire 
 retireCarte()
-{
+{	
 	carteRetirer=$1		 #indice de la carte a retirer 
-	cartesTemp=()		 #tableau temporaire pour la concatenation
+	cartesTemp=()		 #tableau temporaire 
 	
-	#echo Indice de la carte a retirer: $carteRetirer correspond a la ${cartes[$carteRetirer]}
+	#on vide le tableau de tout son contenue avant de le remplir
+	unset cartesTemp 
 	
-	unset cartesTemp #on vide le tableau de tout son contenue avant de le remplir
-
-	#on recupere toutes les cartes apres celles envoyer au joueurs que l'on veut enlever du tableau
-	for x in $(eval echo {$(($carteRetirer + 1))..$((99 - $carteDistibue))});
+	#on copie les cartes du joueur
+	cartesTemp=("${cartes[@]}")
+	
+	#on vide le tableau de tout son contenue avant de le remplir
+	unset cartes
+	
+	#recupere les bonnes valeurs 
+	for i in $(eval echo {0..$((${#cartesTemp[*]} - 1))});
 	do	
-		cartesTemp+=(${cartes[$x]})	
-	done
-	
-	#on retire toutes les cartes a partir de la cartes envoyer au joueur
-	for y in $(eval echo {$carteRetirer..$((99 - $carteDistibue))});
-	do	
-		unset cartes[$y]
-	done
-	
-	#concatene le debut de lancien tableau valide avec le tableau temporaire qui contient bonne valeur
-	for z in $(eval echo {0..${#cartesTemp[*]}});
-	do	
-		cartes+=(${cartesTemp[$z]})	
+		if (( "$carteRetirer" != ${cartesTemp[$i]} ));
+		then
+			cartes+=(${cartesTemp[$i]})	
+		fi
 	done
 }
 
@@ -127,8 +126,7 @@ topDepart()
 		onAttend=true
 		while [ $onAttend == "true" ]
 		do
-			echo "Vous avez recu le top depart." | nc localhost 9092 && onAttend=false
-			sleep 1
+			echo "Vous avez recu le top depart." | nc localhost 9092 2> /dev/null && onAttend=false
 		done
 	done
 }
@@ -151,14 +149,15 @@ traitementManche()
 		fi
 	done
 	
-	echo "Attente de connexion d'un joueur" | nc -l -p 9093
+	echo "Attente de connexion d'un joueur" | nc -l -p 9093 2> /dev/null 
+	
 	carteCourante=$(cat tmp/carteAJouer)
 	echo "" > tmp/carteAJouer
 	numParticipant=$(cat tmp/numJoueur)
 	echo "" > tmp/numJoueur
 
 	echo Carte courante : $carteCourante et carte a jouer : $carteAJouer
-	if (( "$carteCourante" == "$carteAJouer" ));
+	if [ "$carteCourante" == "$carteAJouer" ];
 	then
 		#on enleve la carte des cartes de la manche
 		cartesManche=( ${cartesManche[*]/$carteCourante} )	
@@ -169,7 +168,7 @@ traitementManche()
 		carteRestante=$((carteRestante - 1))
 	else 	
 		#echo Mauvaise carte ! Carte $carteCourante du joueur ???? > tmp/finGame
-		exitGame "Mauvaise carte joué ! Carte $carteCourante"
+		exitPartie "Mauvaise carte joué ! Carte $carteCourante"
 		partieFini=true
 	fi
 }
@@ -193,24 +192,47 @@ deroulementPartie()
 	done
 }
 
+#methode qui permet quand la partie est finie d'écrire un top 10 des parties dans le gestionnaire du jeu
+#ajoute également la partie courante terminé à l'ensemble du fichier
+classementPartie()
+{	
+	#on met dans le fichier classement le nombre de manche et le nombre de joueur peut importe leurs nombre
+	echo -e "$manche\t\t\t$nbJoueursTotaux" >> Classement.txt
+	
+	#on trie le fichier classement
+	sort -n Classement.txt -o Classement.txt
+	
+	echo "Voici le classement dans l'ordre croissant des partie qui on durer le plus longtemps"
+	head -n 1  Classement.txt	
+	tail -n 10 Classement.txt
+}
+
 #fonction qui permet de finir la partie mais d'afficher le soucis avant de tous fermer
-exitGame()
+exitPartie()
 {
 	#envoyer le messages passer en parametres a tous les joueurs
 	echo $1
+	echo "fin" > tmp/finGame
+	echo $1 >> tmp/finGame
+	classementPartie
 	exit 1
 }
 
 #methode qui demarre la partie 
-startGame()
+startPartie()
 {
 	remplieCartes
 	
 	initJoueurs
-	#initRobots
+	initRobots
 	
 	nbJoueursTotaux=$(($nbJoueurs + $nbRobots))
 	#echo Nous avons donc $nbJoueursTotaux participants pour cette partie
+	
+	echo "" > tmp/finGame
+	echo "" > tmp/cartePartie
+	echo "" > tmp/carteAJouer
+	echo "" > tmp/numJoueur
 	
 	#on distribue les cartes une premiere fois avant le top depart
 	distribueCartes
@@ -221,13 +243,4 @@ startGame()
 	deroulementPartie
 }
 
-startGame
-
-#methode qui permet quand la partie est finie decrire le classement sur un fichier
-classementPartie()
-{
-	echo test
-#Recevoir le nom et le prenom des joueurs pour stocker leurs infos 
-#On peut utiliser le nombre de cartes distribué et le nombre de manche passé
-#faire le classement des joueurs et ecrire le resultat sur un fichier
-}
+startPartie
