@@ -20,11 +20,11 @@ waitCartes()
 	onAttend=true
 	while [ $onAttend == "true" ]
 	do
-		#permet au socket du gestionnaire du jeu de se mettre en lecture
-		sleep 1
-		
+		#permet de recevoir les cartes dans l'ordre des joueurs
+		sleep $numeroJoueur
+	
 		#Envoie au gestionnaire du jeu que le joueur a recu les cartes
-		echo "Joueur $numeroJoueur a recu ses cartes." | nc localhost 9091 2> /dev/null | echo "Vous avez reçu vos cartes" && onAttend=false
+		echo "Joueur $numeroJoueur a recu ses cartes." | nc localhost 9091 2> /dev/null | echo "Vous avez reçu vos cartes" & onAttend=false
 	done
 	
 	for i in $(eval echo {1..$(wc -w tmp/cartePartie | cut -d" " -f1)}); #nombre d'élément dans le fichier
@@ -66,12 +66,25 @@ retireCarte()
 	done
 }
 
+ecrireCarteJouer()
+{
+	while [ $partieFini == "false" ]
+	do
+		#si le fichier tmp/carteJouer n'est pas vide
+		if [ $(wc -w tmp/carteJouer | cut -d" " -f1) != 0 ];
+		then
+			cat tmp/carteJouer
+			sleep 1
+			cat "" > tmp/carteJouer
+		fi
+	done
+}
+
 finGame()
 {
 	if [ "$(echo $(cat tmp/finGame) | cut -d" " -f1)" == "fin" ];
 	then
-		#idéalement on devrais écrire tous ce qui se situe apres fin, peut etre avec N-
-		echo $(cat tmp/finGame)
+		tail -n 1 tmp/finGame
 		partiFini=true
 		exit 1
 	fi
@@ -85,15 +98,18 @@ startGame()
 	#quand on a recu les cartes on attend le top depart
 	waitTopDepart
 	
+	#on lance la methode en tache de fond pour afficher chez tous le monde que tel joueur a jouer tel carte
+	#ecrireCarteJouer &
+	
 	while [ $partieFini == "false" ]
 	do
-		#on verifie si la partie est fini
-		finGame 
-		
 		#on verifie si le joueur a encores des cartes
 		if (( ${#cartesJoueur[*]} == 0 ));
 		then
 			echo Vous avez jouer toutes vos cartes, attendez la fin de la manche.
+			
+			#apres chaque manche on verifie si la partie est fini
+			finGame 
 			
 			onAttend=true
 			while [ $onAttend == "true" ]
@@ -101,8 +117,10 @@ startGame()
 				#si le fichier tmp/redistribuer n'est pas vide, redistribution cartes
 				if [ $(wc -w tmp/redistribuer | cut -d" " -f1) != 0 ];
 				then
+					#on reverifie ici avant de redistribuer les cartes
+					finGame 
+					echo "" > tmp/redistribuer
 					onAttend=false
-					#unset cartesJoueur	#on nettoie les indices du tableau des cartes
 					waitCartes		#on attend de nouvelles cartes
 				fi
 				sleep 1
@@ -116,15 +134,8 @@ startGame()
 		#parcours les cartes du joueur afin de verifer que la carte joué est bien presente dans le jeu
 		for i in $(eval echo {0..$((${#cartesJoueur[*]} - 1))});
 		do
-			echo Carte joueur : ${cartesJoueur[0]}
-			echo Carte joueur : ${cartesJoueur[1]}
-			echo Nombre carte : ${#cartesJoueur[@]}
-			echo Valeur i : $i
 			if (( "$carteCourante" == ${cartesJoueur[$i]} ));
-			then
-				#on envoie la carte choisie au gestionnaire de jeu
-				#echo jouerCarte $carteCourante | nc localhost 9091
-				
+			then			
 				#ecrit la valeur de la carte dans carteAJouer
 				echo $carteCourante > tmp/carteAJouer
 				
@@ -134,7 +145,7 @@ startGame()
 				onAttend=true
 				while [ $onAttend == "true" ]
 				do
-					echo "Joueur $numeroJoueur a jouer la carte $carteCourante" | nc localhost 9093 2> /dev/null | echo "Carte joue." && onAttend=false
+					echo "Joueur $numeroJoueur a jouer la carte $carteCourante" | nc localhost 9093 2> /dev/null | echo "Carte joue." & onAttend=false
 				done
 			
 				#on enleve la carte des cartes disponible pour le joueur
@@ -142,9 +153,6 @@ startGame()
 				#car si la carte a retirer est 1, sa enlever tous les 1 
 				#si on a (10 15 1 78 41) et qu'on veut jouer 1, on va avoir (0 5 78 4)
 				retireCarte $carteCourante
-				
-				#on verifie si la partie est fini
-				finGame
 				
 				#on sort de force de la boucle car dans le cas ou on retire la premiere  
 				#carte du tableau, le if va comparer des cases qui n'existe plus  					#et va donc donner une erreur

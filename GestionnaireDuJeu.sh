@@ -56,7 +56,8 @@ remplieCartes()
 #methode qui va distribuer les cartes du jeu au joueur(s) de la partie
 distribueCartes()
 {
-	manche+=1 #a chaque fois les cartes vont etre distribuer on incremente le nombre de manche
+	#on incremente le nombre de manche a chaque distribution de cartes au joueurs
+	manche+=1 
 	echo Manche : $manche
 	for i in $(eval echo {1..$nbJoueursTotaux});
 	do
@@ -68,7 +69,6 @@ distribueCartes()
 			then
 				
 				echo Trop de carte distribué, fin de la partie.
-				partieFini=true
 				exitPartie "Trop de carte distribué, fin de la partie."
 			fi
 				
@@ -85,7 +85,7 @@ distribueCartes()
 			carteDistibue+=1	
 		done
 		echo Cartes : $(cat tmp/cartePartie)
-		echo "Cartes pour le participant $i" | nc -l -p 9091 
+		echo "Cartes distribue" | nc -l -p 9091 
 		echo on a passer la distribution
 		sleep 1 #laisse le temps au participants de recuperer les cartes
 	done
@@ -126,7 +126,7 @@ topDepart()
 		onAttend=true
 		while [ $onAttend == "true" ]
 		do
-			echo "Vous avez recu le top depart." | nc localhost 9092 2> /dev/null && onAttend=false
+			echo "Vous avez recu le top depart." | nc localhost 9092 2> /dev/null & onAttend=false
 		done
 	done
 }
@@ -149,7 +149,9 @@ traitementManche()
 		fi
 	done
 	
-	echo "Attente de connexion d'un joueur" | nc -l -p 9093 2> /dev/null 
+	echo on attend la
+	echo "Attente de connexion d'un joueur." | nc -l -p 9093 2> /dev/null 
+	echo on attend plus
 	
 	carteCourante=$(cat tmp/carteAJouer)
 	echo "" > tmp/carteAJouer
@@ -163,13 +165,12 @@ traitementManche()
 		cartesManche=( ${cartesManche[*]/$carteCourante} )	
 		
 		#envoyer ce message a tous les joueurs/robots
-		echo "Carte $carteCourante joué par le participant n°$numParticipant"
+		echo "" > tmp/carteJouer
+		echo "Carte $carteCourante joué par le participant n°$numParticipant" > tmp/carteJouer
 		
 		carteRestante=$((carteRestante - 1))
 	else 	
-		#echo Mauvaise carte ! Carte $carteCourante du joueur ???? > tmp/finGame
-		exitPartie "Mauvaise carte joué ! Carte $carteCourante"
-		partieFini=true
+		exitPartie "Mauvaise carte joué, fin de la partie. Carte $carteCourante du participant n°$numParticipant"
 	fi
 }
 
@@ -207,15 +208,13 @@ classementPartie()
 	tail -n 10 Classement.txt
 }
 
-#fonction qui permet de finir la partie mais d'afficher le soucis avant de tous fermer
+#fonction qui permet de d'arreter la partie si une erreur a était detect
 exitPartie()
 {
-	#envoyer le messages passer en parametres a tous les joueurs
-	echo $1
 	echo "fin" > tmp/finGame
 	echo $1 >> tmp/finGame
 	classementPartie
-	exit 1
+	partieFini=true
 }
 
 #methode qui demarre la partie 
@@ -233,6 +232,7 @@ startPartie()
 	echo "" > tmp/cartePartie
 	echo "" > tmp/carteAJouer
 	echo "" > tmp/numJoueur
+	echo ""	> tmp/redistribuer
 	
 	#on distribue les cartes une premiere fois avant le top depart
 	distribueCartes

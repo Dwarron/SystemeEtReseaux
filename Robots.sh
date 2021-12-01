@@ -8,7 +8,7 @@ carteCourante=0			#la carte joué par le robot
 
 #methode qui recupere les cartes 
 waitCartes()
-{	echo on attend les cartes
+{	
 	onAttend=true
 	while [ $onAttend == "true" ]
 	do
@@ -16,7 +16,7 @@ waitCartes()
 		sleep $numeroRobot
 		
 		#Envoie au gestionnaire du jeu que le robots a recu les cartes
-		echo "Robot $numeroRobot a recu ses cartes." | nc localhost 9091 2> /dev/null | echo "Vous avez reçu vos cartes" && onAttend=false
+		echo "Robot $numeroRobot a recu ses cartes." | nc localhost 9091 2> /dev/null | echo "Vous avez reçu vos cartes" & onAttend=false
 	done
 	
 	#on trie le fichier qui contient les cartes
@@ -28,15 +28,13 @@ waitCartes()
 	done
 	echo ${cartesRobot[*]} #phase de teste 
 	echo "" > tmp/cartePartie
-	echo on a recu les cartes
 }
 
 #methode qui attend le top depart
 waitTopDepart()
-{	echo on attend le top depart
+{
 	#on attend le top depart
 	echo "Robot $numeroRobot a recu le top depart." | nc -l -p 9092 | echo "Attente du top départ."
-	echo on a recu le top depart
 }
 
 #methode qui essaye de faire jouer le robot au meilleur moment
@@ -51,9 +49,6 @@ jouerRobot()
 	
 	#pour la phase de test 
 	#sleep 0
-
-	#on envoie la carte choisie au gestionnaire de jeu
-	#echo jouerCarte $carteCourante | nc localhost 9091
 	
 	#ecrit la valeur de la carte dans carteAJouer
 	echo $carteCourante > tmp/carteAJouer
@@ -64,7 +59,7 @@ jouerRobot()
 	onAttend=true
 	while [ $onAttend == "true" ]
 	do
-		echo "Robot $numeroRobot a jouer la carte $carteCourante." | nc localhost 9093 2> /dev/null | echo "Le robot a joué." && onAttend=false
+		echo "Robot $numeroRobot a jouer la carte $carteCourante." | nc localhost 9093 2> /dev/null | echo "Le robot a joué." & onAttend=false
 	done
 
 	#on enleve la carte des cartes disponible pour le robot
@@ -75,10 +70,8 @@ finGame()
 {
 	if [ "$(echo $(cat tmp/finGame) | cut -d" " -f1)" == "fin" ];
 	then
-		#idéalement on devrais écrire tous ce qui se situe apres fin, peut etre avec N-
 		echo $(cat tmp/finGame)
 		partiFini=true
-		exit 1
 	fi
 }
 
@@ -117,12 +110,11 @@ startGame()
 	
 	while [ $partieFini == "false" ]
 	do
-		#on verifie si la partie est fini
-		finGame
-			
 		#on verifie si le robot a encores des cartes
 		if (( ${#cartesRobot[*]} == 0 ));
 		then
+			#apres chaque manche on verifie si la partie est fini
+			finGame
 			
 			onAttend=true
 			while [ $onAttend == "true" ]
@@ -130,6 +122,9 @@ startGame()
 				#si le fichier tmp/redistribuer n'est pas vide, redistribution cartes
 				if [ $(wc -w tmp/redistribuer | cut -d" " -f1) != 0 ];
 				then
+					#on reverifie ici avant de redistribuer les cartes
+					finGame 
+					echo "" > tmp/redistribuer
 					onAttend=false
 					waitCartes
 				fi
