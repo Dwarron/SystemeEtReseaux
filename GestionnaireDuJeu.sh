@@ -149,9 +149,7 @@ traitementManche()
 		fi
 	done
 	
-	echo on attend la
 	echo "Attente de connexion d'un joueur." | nc -l -p 9093 2> /dev/null 
-	echo on attend plus
 	
 	carteCourante=$(cat tmp/carteAJouer)
 	echo "" > tmp/carteAJouer
@@ -208,7 +206,7 @@ classementPartie()
 	tail -n 10 Classement.txt
 }
 
-#fonction qui permet de d'arreter la partie si une erreur a était detect
+#fonction qui permet d'arreter la partie si une erreur a était detecte
 exitPartie()
 {
 	echo "fin" > tmp/finGame
