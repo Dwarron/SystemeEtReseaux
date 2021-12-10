@@ -1,27 +1,20 @@
 #!/bin/bash
 
-port=9092
+port=9091
 serverPort=9091
 numeroJoueur=$1			#numero du joueur passe en parametre dans le gestionnaire du jeu
-partieFini=false		#booleen pour savoir si la partie est finie
-topDepart=false			#booleean pour lancer la partie
+partieFinie=false		#booleen pour savoir si la partie est finie
 cartesJoueur=()			#les cartes que le joueur possede
-carteCourante=0			#la carte jouee par le joueur
 
-#echo Vous etes le joueur de numero : $numeroJoueur
-
-#echo Entrez votre Nom :
-#read nomJoueur
-
-#echo Entrez votre Prenom :
-#read prenomJoueur
+echo "Vous etes le joueur de numero : $numeroJoueur"
 
 findFreePort()
 {
+	port=$(($port+$numeroJoueur))
 	nbLines=$(netstat -an | grep :$port | wc -l)
 	while [ $nbLines -gt 0 ];
 	do
-		port=$(($port + 1))
+		port=$(($port + $numeroJoueur))
 		nbLines=$(netstat -an | grep :$port | wc -l)
 	done
 }
@@ -30,15 +23,19 @@ findFreePort()
 waitCartes()
 {
 	msg=$(echo | read | nc -q 1 -l -p $port)
+
+	oldIFS=$IFS
 	local IFS='/'
 	read -ra msgParts <<< $msg
+	IFS=$oldIFS
 	if [ "${msgParts[0]}" = "distributionCartes" ]
 	then
 		local IFS=' '
 		read -ra cartesJoueur <<< ${msgParts[1]}
+		IFS=$oldIFS
 		echo "Vos cartes ont ete distribuees."
 	else
-		echo "Erreur, cartes attendues"
+		echo "Erreur, cartes attendues" $msg
 	fi
 }
 
@@ -52,6 +49,8 @@ waitTopDepart()
 	else
 		echo "Erreur, top depart attendu"
 	fi
+	ajoue=true
+	mancheFinie=false
 }
 
 #fonction qui retire la carte passee en parametre du tableau des cartes.
@@ -67,26 +66,13 @@ retireCarte()
 	unset cartesJoueur
 
 	#recuperation des bonnes valeur c'est-a-dire toutes sauf la carte retirer
-	for c in ${cartesTemp[*]});
+	for c in ${cartesTemp[*]};
 	do
-		if [ $carteRetiree -neq $c ];
+		if [ $carteRetiree -ne $c ];
 		then
 			cartesJoueur+=($c)
 		fi
 	done
-}
-
-#fonction qui verifie si la partie est terminee.
-finGame()
-{
-	#verifie si la premiere ligne du fichier tmp/finGame est egal a la chaine de caractere "fin"
-	if [ "$(echo $(cat tmp/finGame) | cut -d" " -f1)" == "fin" ];
-	then
-		#on ecrit dans le terminal l'erreur contenue dans le fichier tmp/finGame
-		tail -n 1 tmp/finGame
-		partiFini=true
-		exit 1
-	fi
 }
 
 register()
@@ -95,44 +81,23 @@ register()
 	echo "register/$numeroJoueur/$port" | nc localhost $serverPort
 }
 
-#fonction qui va permettre au joueur de demarrer sa partie.
-startGame()
+joue()
 {
-	register
-	waitCartes
-	waitTopDepart
+	if [ $ajoue = true ];
+	then
+		echo "Vos cartes sont : ${cartesJoueur[*]}"
+		echo "Choissisez une carte a jouer :"
+		read -t 1 carte 2>/dev/null
+		exitCode=$?
+		ajoue=false
+	else
+		read -t 1 carte 2>/dev/null
+		exitCode=$?
+	fi
 
-	#on lance la fonction en tache de fond pour afficher chez tout les joueur humain que tel joueur a joue telle carte
-	#ecrireCarteJouer &
-
-	while [ $partieFini == "false" ]
-	do
-		#on verifie si le joueur a encore des cartes
-		if [ ${#cartesJoueur[@]} -eq 0 ];
-		then
-			echo "Vous avez joue toutes vos cartes, attendez la fin de la manche."
-
-			#apres chaque manche on verifie si la partie est finie
-			finGame
-
-			onAttend=true
-			while [ $onAttend == "true" ]
-			do
-				#si le fichier tmp/redistribuer n'est pas vide, redistribution des cartes
-				if [ $(wc -w tmp/redistribuer | cut -d" " -f1) != 0 ];
-				then
-					#on reverifie ici avant de redistribuer les cartes
-					finGame
-					echo "" > tmp/redistribuer
-					onAttend=false
-					waitCartes		#on attend de nouvelles cartes
-				fi
-			done
-		fi
-
-		echo Vos cartes sont : ${cartesJoueur[*]}
-		echo Choissisez une carte a jouer :
-		read carte
+	if [ $exitCode -eq 0 ];
+	then
+		ajoue=true
 
 		local exist=false
 		#parcours des cartesTemps du joueur afin de verifer que la carte jouee est bien presente dans son jeu
@@ -146,19 +111,89 @@ startGame()
 
 		if [ $exist = true ];
 		then
-			echo "poseCarte/${carte}/${numeroJoueur}" | nc localhost $serverPort
-
 			#on enleve la carte des cartes disponible pour le joueur
 			#on n'utilise pas cartesJoueur=( "${cartesJoueur[*]/$carteCourante" )
 			#car si la carte a retirer est 1, tous les 1 sont enleves
 			#si on a les cartes(10 15 1 78 41) et qu'on veut jouer 1, on va avoir (0 5 78 4)
 			retireCarte $carte
+
+			echo "poseCarte/${carte}/${numeroJoueur}" | nc localhost $serverPort
+
+			#on verifie si le joueur a encore des cartes a jouer
+			if [ ${#cartesJoueur[@]} -eq 0 ];
+			then
+				echo "Vous avez joue toutes vos cartes, attendez la fin de la manche."
+				mancheFinie=true
+			fi
 		else
 			echo "Carte non presente dans votre jeu."
 		fi
+	fi
+}
 
+ecoute()
+{
+	msg=$(echo | read | nc -w 1 -l -p $port 2>/dev/null)
+	exitCode=$?
+	if [ $exitCode -eq 0 ];
+	then
+		oldIFS=$IFS
+		local IFS='/'
+		read -ra msgParts <<< $msg
+		IFS=$oldIFS
+
+		case "${msgParts[0]}" in
+
+			 "cartePosee")
+					echo "Carte ${msgParts[1]} posee par le joueur ${msgParts[2]}"
+					;;
+
+				"mancheGagnee")
+					echo "Felicitations, la manche a ete remportee"
+					echo
+					unset cartesJoueur
+					waitCartes
+					waitTopDepart
+					;;
+
+				"mauvaiseCarte")
+					echo "Echec: mauvaise carte posee"
+					;;
+
+				"triche")
+					echo "Tentative de triche detectee par le gestionnaire"
+					;;
+
+				"exitPartie")
+					echo "Fin du jeu"
+					partieFinie=true
+					;;
+
+				*)
+					echo $msg
+					;;
+		esac
+	fi
+}
+
+#fonction qui va permettre au joueur de jouer la partie.
+game()
+{
+	register
+	waitCartes
+	waitTopDepart
+
+	while [ $partieFinie = false ]
+	do
+		if [ $mancheFinie = false ];
+		then
+			ecoute
+			joue
+		else
+			ecoute
+		fi
 	done
 }
 
 #on lance la fonction qui va faire jouer le joueur et qui va appeler toutes les autres fonctions
-startGame
+game
