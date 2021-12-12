@@ -386,7 +386,7 @@ startPartie()
 	nbJoueursTotal=$(($nbJoueurs + $nbRobots))
 	echo "Nous avons ${nbJoueursTotal} participants pour cette partie"
 
-	if [ $nbJoueursTotal -lt 1 ];
+	if [ $nbJoueursTotal -lt 2 ];
 	then
 		echo "Pas assez de joueurs pour jouer";
 		startPartie
