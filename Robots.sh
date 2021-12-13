@@ -1,19 +1,19 @@
 #!/bin/bash
 
-port=9091
-serverPort=9091
+port=9091				#port du robot
+serverPort=9091			#port du gestionnaire
 numeroRobot=$1			#numero du robot passe en parametre dans le gestionnaire du jeu
 partieFinie=false		#booleen pour savoir si la partie est finie
 cartesRobot=()			#les cartes que le robot possede
-tempsJoue=0
-
-echo "Robot comme joueur $numeroRobot"
+tempsJoue=0				#le temps a partir duquel le robot doit poser sa carte
 
 #fonction qui cherche un port de libre
 findFreePort()
 {
 	port=$(($port+$numeroRobot))
 	nbLines=$(netstat -an | grep :$port | wc -l)
+	
+	#tant qu'il y a des processus qui utilisent le port teste, on en cherche un autre
 	while [ $nbLines -gt 0 ];
 	do
 		port=$(($port + $numeroRobot))
@@ -21,11 +21,12 @@ findFreePort()
 	done
 }
 
-#methode qui attend l'envoi des cartes du gestionnaire du jeu et qui les recupere.
+#fonction qui attend l'envoi des cartes du gestionnaire du jeu et qui les recupere puis les tri par ordre croissant.
 waitCartes()
 {
 	msg=$(echo | read | nc -q 1 -l -p $port)
-
+	
+	#decoupe en morceaux selon le separateur
 	oldIFS=$IFS
 	local IFS='/'
 	read -ra msgParts <<< $msg
@@ -34,6 +35,8 @@ waitCartes()
 	then
 		local IFS=' '
 		read -ra cartesDesordre <<< ${msgParts[1]}
+		
+		#tri en ordre croissant
 		cartesRobot=($(tr ' ' '\n' <<< ${cartesDesordre[*]} | sort -n | tr -s '\n' ' ' | sed '$s/ $/\n/'))
 		IFS=$oldIFS
 	else
@@ -56,19 +59,19 @@ waitTopDepart()
 	calculTemps
 }
 
-#fonction qui retire la carte passee en parametre du tableau des cartes.
+#fonction qui retire la carte passee en parametre du tableau des cartes du robot
 retireCarte()
 {
 	carteRetiree=$1		 #carte a retirer
 	cartesTemp=()		 #tableau temporaire
 
-	#on copie les cartes du joueur
+	#on copie les cartes du robot
 	cartesTemp=(${cartesRobot[*]})
 
-	#on vide le tableau de tout son contenue avant de le remplir
+	#on vide le tableau de tout son contenu avant de le remplir
 	unset cartesRobot
 
-	#recuperation des bonnes valeur c'est-a-dire toutes sauf la carte retirer
+	#recuperation des bonnes valeur c'est-a-dire toutes sauf la carte retiree
 	for c in ${cartesTemp[*]};
 	do
 		if [ $carteRetiree -ne $c ];
@@ -78,6 +81,7 @@ retireCarte()
 	done
 }
 
+#enregistre le robot
 register()
 {
 	findFreePort
@@ -99,7 +103,7 @@ calculTemps()
 	tempsJoue=$(( $(date +%s) + $time))
 }
 
-#fonction qui permet au robot de jouer durant la partie en envoyant ses differente carte.
+#permet au robot de jouer durant la partie en envoyant sa carte la plus basse.
 joue()
 {
 	#on retire la carte jouee des cartes disponibles pour le robot
@@ -117,17 +121,22 @@ joue()
 	fi
 }
 
+#permet d'ecouter les informations du gestionnaire
 ecoute()
 {
 	msg=$(echo | read | nc -w 1 -l -p $port 2>/dev/null)
 	exitCode=$?
+	
+	#si on a recu quelquechose
 	if [ $exitCode -eq 0 ];
 	then
+		#decoupe en morceaux selon le separateur
 		oldIFS=$IFS
 		local IFS='/'
 		read -ra msgParts <<< $msg
 		IFS=$oldIFS
 
+	#differentes actions en fonction du tag recupere dans le message
 		case "${msgParts[0]}" in
 
 			 "cartePosee")
@@ -162,7 +171,7 @@ ecoute()
 	fi
 }
 
-#fonction qui va permettre au joueur de demarrer sa partie.
+#fonction principale de jeu
 game()
 {
 	register
@@ -184,5 +193,7 @@ game()
 	done
 }
 
-#on lance la fonction qui va faire jouer le joueur et qui va appeler toutes les autres fonctions
+echo "Robot comme joueur $numeroRobot"
+
+#on lance la fonction qui va faire jouer le robot et qui va appeler toutes les autres fonctions
 game

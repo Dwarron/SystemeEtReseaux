@@ -1,18 +1,18 @@
 #!/bin/bash
 
-port=9091
-serverPort=9091
+port=9091				#port du joueur
+serverPort=9091			#port du gestionnaire
 numeroJoueur=$1			#numero du joueur passe en parametre dans le gestionnaire du jeu
 partieFinie=false		#booleen pour savoir si la partie est finie
 cartesJoueur=()			#les cartes que le joueur possede
-
-echo "Vous etes le joueur de numero : $numeroJoueur"
 
 #fonction qui cherche un port de libre
 findFreePort()
 {
 	port=$(($port+$numeroJoueur))
 	nbLines=$(netstat -an | grep :$port | wc -l)
+	
+	#tant qu'il y a des processus qui utilisent le port teste, on en cherche un autre
 	while [ $nbLines -gt 0 ];
 	do
 		port=$(($port + $numeroJoueur))
@@ -20,11 +20,12 @@ findFreePort()
 	done
 }
 
-#methode qui attend l'envoi des cartes du gestionnaire du jeu et qui les recupere.
+#fonction qui attend l'envoi des cartes par le gestionnaire du jeu et qui les recupere.
 waitCartes()
 {
 	msg=$(echo | read | nc -q 1 -l -p $port)
 
+	#decoupe en morceaux selon le separateur
 	oldIFS=$IFS
 	local IFS='/'
 	read -ra msgParts <<< $msg
@@ -54,7 +55,7 @@ waitTopDepart()
 	mancheFinie=false
 }
 
-#fonction qui retire la carte passee en parametre du tableau des cartes.
+#fonction qui retire la carte passee en parametre du tableau des cartes du joueur.
 retireCarte()
 {
 	carteRetiree=$1		 #carte a retirer
@@ -63,10 +64,10 @@ retireCarte()
 	#on copie les cartes du joueur
 	cartesTemp=(${cartesJoueur[*]})
 
-	#on vide le tableau de tout son contenue avant de le remplir
+	#on vide le tableau de tout son contenu avant de le remplir
 	unset cartesJoueur
 
-	#recuperation des bonnes valeur c'est-a-dire toutes sauf la carte retirer
+	#recuperation des bonnes valeur c'est-a-dire toutes sauf la carte retiree
 	for c in ${cartesTemp[*]};
 	do
 		if [ $carteRetiree -ne $c ];
@@ -76,12 +77,14 @@ retireCarte()
 	done
 }
 
+#enregistre le joueur
 register()
 {
 	findFreePort
 	echo "register/$numeroJoueur/$port" | nc localhost $serverPort
 }
 
+#permet a l'utilisateur de jouer
 joue()
 {
 	if [ $ajoue = true ];
@@ -95,13 +98,14 @@ joue()
 		read -t 1 carte 2>/dev/null
 		exitCode=$?
 	fi
-
+	
+	#lecture bien effectuee
 	if [ $exitCode -eq 0 ];
 	then
 		ajoue=true
 
 		local exist=false
-		#parcours des cartesTemps du joueur afin de verifer que la carte jouee est bien presente dans son jeu
+		#parcours des cartes du joueur afin de verifer que la carte jouee est bien presente dans son jeu
 		for i in ${cartesJoueur[*]};
 		do
 			if [ $carte -eq $i ];
@@ -117,7 +121,8 @@ joue()
 			#car si la carte a retirer est 1, tous les 1 sont enleves
 			#si on a les cartes(10 15 1 78 41) et qu'on veut jouer 1, on va avoir (0 5 78 4)
 			retireCarte $carte
-
+			
+			#envoi au gestionnaire la carte a poser
 			echo "poseCarte/${carte}/${numeroJoueur}" | nc localhost $serverPort
 
 			#on verifie si le joueur a encore des cartes a jouer
@@ -132,18 +137,22 @@ joue()
 	fi
 }
 
+#permet d'ecouter les informations du gestionnaire
 ecoute()
 {
 	msg=$(echo | read | nc -w 1 -l -p $port 2>/dev/null)
 	exitCode=$?
+	
+	#si on a recu quelquechose
 	if [ $exitCode -eq 0 ];
 	then
+		#decoupe en morceaux selon le separateur
 		oldIFS=$IFS
 		local IFS='/'
 		read -ra msgParts <<< $msg
 		IFS=$oldIFS
 
-		#differente action en fonction du tag recupere dans le socket
+		#differente action en fonction du tag recupere dans le message
 		case "${msgParts[0]}" in
 
 			 "cartePosee")
@@ -178,7 +187,7 @@ ecoute()
 	fi
 }
 
-#fonction qui va permettre au joueur de jouer la partie.
+#fonction principale de jeu
 game()
 {
 	register
@@ -196,6 +205,8 @@ game()
 		fi
 	done
 }
+
+echo "Vous etes le joueur de numero : $numeroJoueur"
 
 #on lance la fonction qui va faire jouer le joueur et qui va appeler toutes les autres fonctions
 game

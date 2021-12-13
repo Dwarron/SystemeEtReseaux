@@ -2,24 +2,27 @@
 
 noMsgAvailable=true
 
-cartesJoueurs=()
+cartesJoueurs=()		#tableau qui represente les cartes du jeu, triees par joueur et constant le long de la manche pour pouvoir verifier les cartes posees
 cartesManche=()			#tableau qui represente les cartes du jeu durant une manche
-nbJoueurs=0			#nombre de joueurs
-nbRobots=0			#nombre de robots
+nbJoueurs=0				#nombre de joueurs
+nbRobots=0				#nombre de robots
 nbJoueursTotal=0		#nombre de participants total
 declare -i manche=0		#nombre de manche de la partie, declare en integer (afin d'utiliser +=)
-etatPartie="debut"
-connectPort=9091
-playersPort=()
+etatPartie="debut"		#etat actuel de la partie
+connectPort=9091		#port sur lequel le gestionnaire ecoute
+playersPort=()			#port utilise par chaque joueur pour ecouter
 
+#lancement du serveur d'ecoute des messages
 ./Server.sh $connectPort 2>/dev/null &
 pidServer=$!
 
+#execute exitPartie lorsque que ctrl+c est tape
 trap 'exitPartie;' INT
 
+#initialisation des joueurs de la partie
 initJoueurs()
 {
-	#initialiser les joueurs
+	#recuperation du nombre de joueurs
 	read -p 'Pour commencer, selectionner le nombre de joueur(s) : ' nbJoueurs
 
 	if [ $nbJoueurs -ge 0 ];
@@ -29,7 +32,7 @@ initJoueurs()
 			for i in $(eval echo {1..$nbJoueurs});
 			do
 				#ouvre un terminal en tache de fond pour chaque joueur
-				gnome-terminal -- bash -c "./Joueurs.sh $i; echo 'Appuyez sur entrer pour quitter'; read && exit" 1>/dev/null  & #$i represente le numero du joueurs
+				gnome-terminal -- bash -c "./Joueurs.sh $i; echo 'Appuyez sur entrer pour quitter'; read && exit" 1>/dev/null  & #$i represente le numero du joueur
 			done
 		fi
 	else
@@ -38,9 +41,10 @@ initJoueurs()
 	fi
 }
 
+#initialisation des robots de la partie
 initRobots()
 {
-	#initialiser les robots
+	#recuperation du nombre de robots
 	read -p 'Ensuite, selectionner le nombre de robot(s) : ' nbRobots
 
 	if [ $nbRobots -ge 0 ];
@@ -55,19 +59,22 @@ initRobots()
 			done
 		fi
 	else
-		echo Nombre de robots errone
+		echo "Nombre de robots errone"
 		initRobots
 	fi
 }
 
+#recuperation du premier message en attente
 getNextMessage()
 {
+	#decompte du nombre de lignes, pour savoir si un message est disponible ou non
 	nbLines=$(wc -l < tmp/socket)
 	if [ $nbLines != "0" ];
 	then
 		noMsgAvailable=false
 	fi
 
+	#si pas de message disponible, on en attends un
 	while [ $noMsgAvailable = true ];
 	do
 		sleep 1
@@ -77,27 +84,34 @@ getNextMessage()
 			noMsgAvailable=false
 		fi
 	done
+	
+	#lecture de la premiere ligne du fichier
 	local line=$(awk 'NR==1 {print; exit}' tmp/socket)
 
+	#copie du fichier sans la premiere ligne dans un fichier temporaire, puis on transferera le contenu du fichier temporaire dans le fichier original
 	awk 'NR!=1 {print;}' tmp/socket > tmp/socketTemp
 	cat tmp/socketTemp > tmp/socket
 	rm tmp/socketTemp
 
+	#decompte du nombre de lignes
 	nbLines=$(wc -l < tmp/socket)
 	if [ $nbLines = "0" ];
 	then
 		noMsgAvailable=true
 	fi
 
+	#renvoie la ligne lue
 	echo $line
 }
 
+#envoi le message $1 au joueur $2, via un socket
 sendMessageToPlayer()
 {
 	msg=$1
 	playerNb=$2
 	echo $msg | nc -q 1 localhost ${playersPort[$playerNb]} 2>/dev/null
 
+	#test si le message a bien ete envoye, sinon recommence
 	exitCode=$?
 	if [ $exitCode -ne 0 ];
 	then
@@ -105,6 +119,7 @@ sendMessageToPlayer()
 	fi
 }
 
+#envoi le message $1 a tous les joueurs
 sendMessageToAllPlayer()
 {
 	msg=$1
@@ -114,7 +129,7 @@ sendMessageToAllPlayer()
 	done
 }
 
-#methode qui va melanger les cartes du jeu pour la manche
+# melange les cartes du jeu pour la manche et les transmets aux concernes
 melangeCartes()
 {
 	#on incremente le nombre de manche a chaque distribution de cartes au joueurs
@@ -132,7 +147,8 @@ melangeCartes()
 	for j in $(eval echo {1..$nbJoueursTotal});
 	do
 		cartesString=""
-		#ici la manche permet de savoir combien de cartes par joueurs on va distribuer
+		
+		#ici la manche permet de savoir combien de cartes par joueur on va distribuer
 		for m in $(eval echo {1..$manche});
 		do
 			#indice aleatoire afin de recuperer une carte dans le jeu de cartes
@@ -142,6 +158,8 @@ melangeCartes()
 			cartesManche+=(${cartes[$randomCarte]})
 			cartesJoueurs+=(${cartes[$randomCarte]})
 			cartesString+="${cartes[$randomCarte]} "
+			
+			#carte retire pour ne pas etre choisie a nouveau
 			retireCarte $randomCarte
 
 		done
@@ -151,7 +169,7 @@ melangeCartes()
 	done
 }
 
-#methode qui retire la carte passee en parametre du tableau des cartes.
+#retire la carte $1 du tableau des cartes.
 retireCarte()
 {
 	carteRetiree=$1		 #indice de la carte a retirer
@@ -173,7 +191,7 @@ retireCarte()
 	done
 }
 
-#methode qui retire la carte passee en parametre du tableau des cartes de la manche.
+#retire la carte $1 du tableau des cartes de la manche.
 retireCarteManche()
 {
 	carteRetiree=$1		 #carte a retirer
@@ -195,7 +213,7 @@ retireCarteManche()
 	done
 }
 
-#methode qui envoie le top depart de la partie a tous les joueurs.
+#envoi du top depart de la manche a tous les joueurs.
 topDepart()
 {
 	sleep $(($RANDOM % 6))
@@ -204,7 +222,7 @@ topDepart()
 	etatPartie="jeu"
 }
 
-#methode qui permet de traiter les informations reçues par l'ensemble des joueurs.
+#traite les informations reçues par l'ensemble des joueurs.
 traitementManche()
 {
 	carteAJouer=100		#represente la plus petite carte de la manche en cours
@@ -219,6 +237,7 @@ traitementManche()
 	done
 
 	msg=$(getNextMessage)
+	#decoupe en morceaux selon le separateur
 	oldIFS=$IFS
 	local IFS='/'
 	read -ra msgParts <<< $msg
@@ -247,7 +266,7 @@ traitementManche()
 			do
 				if [ $carteJouee -eq ${cartesJoueurs[$i]} ];
 				then
-					#intervalle dans lesquelles sont comprises les cartes du joueur qui a joue (pour verifier qu'il possede bien la carte)
+					#intervalle dans lesquel est compris les cartes du joueur qui a joue (pour verifier qu'il possede bien la carte)
 					debutCartesJoueur=$((($joueur - 1) * $manche))		#inclu
 					finCartesJoueur=$(($debutCartesJoueur + $manche))		#exclu
 					if [ $i -ge $debutCartesJoueur -a $i -lt $finCartesJoueur ];
@@ -299,6 +318,7 @@ nouvelleManche()
 	topDepart
 }
 
+#enregistre un joueur dans la partie
 enregistrementProcess()
 {
 	msg=$(getNextMessage)
@@ -310,6 +330,7 @@ enregistrementProcess()
 	then
 		echo "Error, not register message received" ${msgParts[0]}
 	else
+		#on enregistre son port pour pouvoir communiquer avec lui
 		playersPort[${msgParts[1]}]=${msgParts[2]}
 
 		if [ ${#playersPort[@]} -eq $nbJoueursTotal ];
@@ -320,7 +341,7 @@ enregistrementProcess()
 	fi
 }
 
-#methode qui permet de faire tourner la partie tant qu'elle n'est pas finie.
+#fait tourner la partie tant qu'elle n'est pas finie.
 deroulementPartie()
 {
 	while [ $etatPartie != "fin" ]
@@ -344,8 +365,8 @@ deroulementPartie()
 	done
 }
 
-#methode qui permet quand la partie est finie d'ecrire un top 10 des parties dans le gestionnaire du jeu.
-#ajoute egalement la partie courante terminee a l'ensemble du fichier.
+#affiche un top 10 des parties dans le gestionnaire du jeu.
+#ajoute egalement la partie terminee au fichier.
 classementPartie()
 {
 	#saut de ligne
@@ -364,7 +385,7 @@ classementPartie()
 	tail -n 10 Classement.txt
 }
 
-#fonction qui permet d'arreter la partie si une erreur a ete detectee
+#arrete la partie
 exitPartie()
 {
 	kill -s INT $pidServer
@@ -376,7 +397,7 @@ exitPartie()
 	classementPartie
 }
 
-#methode qui demarre la partie.
+#demarre la partie
 startPartie()
 {
 	etatPartie="enregistrement"
@@ -396,5 +417,5 @@ startPartie()
 	fi
 }
 
-#on lance la methode qui demarre la partie qui va appeler en cascade toutes les autres fonctions
+#fonction qui demarre la partie puis qui va appeler en cascade toutes les autres fonctions
 startPartie
