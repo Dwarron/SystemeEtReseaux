@@ -9,6 +9,7 @@ tempsJoue=0
 
 echo "Robot comme joueur $numeroRobot"
 
+#fonction qui cherche un port de libre
 findFreePort()
 {
 	port=$(($port+$numeroRobot))
@@ -83,6 +84,12 @@ register()
 	echo "register/$numeroRobot/$port" | nc localhost $serverPort
 }
 
+#fonction qui calcul le temps pour essayer de faire jouer le robot au meilleur moment.
+#le principe est le suivant :
+#1. on recupere la carte d'indice 0, donc la premiere carte du tableau des cartes du joueur, qui ont ete triee auparavant (lors de leur recuperation).
+#2. On genere un nombre aleatoire entre 1 et 6.
+#3. On multiplie ce nombre par la valeur de la carte, donc plus la carte va etre grand plus le resultat aura des chances d'etre grand egalement.
+#3. On divise l'ensemble par 15 pour ne pas obtenir des nombres trop grand. On attend ensuite pendant ce nombre de secondes
 calculTemps()
 {
 	carte=${cartesRobot[0]}
@@ -92,12 +99,7 @@ calculTemps()
 	tempsJoue=$(( $(date +%s) + $time))
 }
 
-#fonction qui essaye de faire jouer le robot au meilleur moment.
-#le principe est le suivant :
-#1. on recupere la carte d'indice 0, donc la premiere carte du tableau des cartes du joueur, qui ont ete triee auparavant (lors de leur recuperation).
-#2. On genere un nombre aleatoire entre 1 et 6.
-#3. On multiplie ce nombre par la valeur de la carte, donc plus la carte va etre grand plus le resultat aura des chances d'etre grand egalement.
-#3. On divise l'ensemble par 15 pour ne pas obtenir des nombres trop grand. On attend ensuite pendant ce nombre de secondes
+#fonction qui permet au robot de jouer durant la partie en envoyant ses differente carte.
 joue()
 {
 	#on retire la carte jouee des cartes disponibles pour le robot

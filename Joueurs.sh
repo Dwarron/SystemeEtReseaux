@@ -8,6 +8,7 @@ cartesJoueur=()			#les cartes que le joueur possede
 
 echo "Vous etes le joueur de numero : $numeroJoueur"
 
+#fonction qui cherche un port de libre
 findFreePort()
 {
 	port=$(($port+$numeroJoueur))
@@ -142,6 +143,7 @@ ecoute()
 		read -ra msgParts <<< $msg
 		IFS=$oldIFS
 
+		#differente action en fonction du tag recupere dans le socket
 		case "${msgParts[0]}" in
 
 			 "cartePosee")

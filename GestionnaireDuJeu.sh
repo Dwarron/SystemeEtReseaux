@@ -348,6 +348,7 @@ deroulementPartie()
 #ajoute egalement la partie courante terminee a l'ensemble du fichier.
 classementPartie()
 {
+	#saut de ligne
 	echo
 	#on ecrit dans le fichier Classement.txt le nombre de manche et le nombre de joueur
 	#l'option -e permet d'utiliser les "\t" qui represente une tabulation
@@ -356,10 +357,10 @@ classementPartie()
 	#on tri le fichier classement
 	sort -n Classement.txt -o Classement.txt
 
-	#on affiche dans le terminale du gestionnaire du jeu les titres des colonnes avec la commande "head" et le top 10 avec la commande "tail"
+	#on affiche dans le terminale du gestionnaire du jeu le top 10 avec la commande "tail"
+	echo "***************************************************************************************"
 	echo "Voici le classement dans l'ordre croissant des parties qui ont durees le plus longtemps"
 	echo -e "Manche\t\t\tNombre de joueurs"
-	head -n 1  Classement.txt
 	tail -n 10 Classement.txt
 }
 
