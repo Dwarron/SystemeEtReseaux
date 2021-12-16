@@ -11,7 +11,7 @@ findFreePort()
 {
 	port=$(($port+$numeroJoueur))
 	nbLines=$(netstat -an | grep :$port | wc -l)
-	
+
 	#tant qu'il y a des processus qui utilisent le port teste, on en cherche un autre
 	while [ $nbLines -gt 0 ];
 	do
@@ -81,7 +81,12 @@ retireCarte()
 register()
 {
 	findFreePort
-	echo "register/$numeroJoueur/$port" | nc localhost $serverPort
+	echo "register/$numeroJoueur/$port" | nc localhost $serverPort 2>/dev/null
+	exitCode=$?
+	if [ $exitCode -ne 0 ];
+	then
+		register
+	fi
 }
 
 #permet a l'utilisateur de jouer
@@ -98,7 +103,7 @@ joue()
 		read -t 1 carte 2>/dev/null
 		exitCode=$?
 	fi
-	
+
 	#lecture bien effectuee
 	if [ $exitCode -eq 0 ];
 	then
@@ -121,7 +126,7 @@ joue()
 			#car si la carte a retirer est 1, tous les 1 sont enleves
 			#si on a les cartes(10 15 1 78 41) et qu'on veut jouer 1, on va avoir (0 5 78 4)
 			retireCarte $carte
-			
+
 			#envoi au gestionnaire la carte a poser
 			echo "poseCarte/${carte}/${numeroJoueur}" | nc localhost $serverPort
 
@@ -142,7 +147,7 @@ ecoute()
 {
 	msg=$(echo | read | nc -w 1 -l -p $port 2>/dev/null)
 	exitCode=$?
-	
+
 	#si on a recu quelquechose
 	if [ $exitCode -eq 0 ];
 	then

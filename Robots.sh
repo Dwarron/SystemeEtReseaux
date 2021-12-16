@@ -12,7 +12,7 @@ findFreePort()
 {
 	port=$(($port+$numeroRobot))
 	nbLines=$(netstat -an | grep :$port | wc -l)
-	
+
 	#tant qu'il y a des processus qui utilisent le port teste, on en cherche un autre
 	while [ $nbLines -gt 0 ];
 	do
@@ -25,7 +25,7 @@ findFreePort()
 waitCartes()
 {
 	msg=$(echo | read | nc -q 1 -l -p $port)
-	
+
 	#decoupe en morceaux selon le separateur
 	oldIFS=$IFS
 	local IFS='/'
@@ -35,7 +35,7 @@ waitCartes()
 	then
 		local IFS=' '
 		read -ra cartesDesordre <<< ${msgParts[1]}
-		
+
 		#tri en ordre croissant
 		cartesRobot=($(tr ' ' '\n' <<< ${cartesDesordre[*]} | sort -n | tr -s '\n' ' ' | sed '$s/ $/\n/'))
 		IFS=$oldIFS
@@ -85,7 +85,12 @@ retireCarte()
 register()
 {
 	findFreePort
-	echo "register/$numeroRobot/$port" | nc localhost $serverPort
+	echo "register/$numeroJoueur/$port" | nc localhost $serverPort 2>/dev/null
+	exitCode=$?
+	if [ $exitCode -ne 0 ];
+	then
+		register
+	fi
 }
 
 #fonction qui calcul le temps pour essayer de faire jouer le robot au meilleur moment.
@@ -126,7 +131,7 @@ ecoute()
 {
 	msg=$(echo | read | nc -w 1 -l -p $port 2>/dev/null)
 	exitCode=$?
-	
+
 	#si on a recu quelquechose
 	if [ $exitCode -eq 0 ];
 	then
